@@ -55,11 +55,13 @@ secret scan. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ## Deploy
 
-Vercel `iad1`, auto-deploy on `main`, preview URL per PR. Hooked up in
-[BRI-4](#).
+Vercel `iad1`, auto-deploy on `main`, preview URL per PR. Setup, secrets
+policy, and rollback steps live in
+[docs/deployment.md](docs/deployment.md).
 
 ## Where to look next
 
 - ADR 0001: [docs/adr/0001-foundational-stack.md](docs/adr/0001-foundational-stack.md)
+- Deployment: [docs/deployment.md](docs/deployment.md)
 - CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
-- Health check: `GET /api/health` → `{ "ok": true }`
+- Health check: `GET /api/health` → returns `{ ok, deploy: { commitSha, region, env, ... } }`
