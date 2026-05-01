@@ -1,0 +1,11 @@
+title = "Brilworks gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow common false positives in lockfiles and Next.js build output"
+paths = [
+    '''pnpm-lock\.yaml''',
+    '''\.next/.*''',
+]
