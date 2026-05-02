@@ -1,11 +1,9 @@
-export type DeployEnv = "production" | "preview" | "development" | "unknown";
-
 export interface DeployInfo {
   commitSha: string | null;
   commitShaShort: string | null;
-  deploymentId: string | null;
-  region: string | null;
-  env: DeployEnv;
+  runId: string | null;
+  ref: string | null;
+  builtAt: string;
 }
 
 export interface HealthStatus {
@@ -13,29 +11,25 @@ export interface HealthStatus {
   deploy: DeployInfo;
 }
 
-type DeploySource = Readonly<Record<string, string | undefined>>;
+type EnvSource = Readonly<Record<string, string | undefined>>;
 
-function normaliseEnv(value: string | undefined): DeployEnv {
-  if (value === "production" || value === "preview" || value === "development") {
-    return value;
-  }
-  return "unknown";
-}
-
-export function readDeployInfo(source: DeploySource = process.env): DeployInfo {
-  const sha = source.VERCEL_GIT_COMMIT_SHA ?? null;
+export function readDeployInfo(
+  env: EnvSource = process.env,
+  now: () => Date = () => new Date(),
+): DeployInfo {
+  const sha = env.GITHUB_SHA ?? null;
   return {
     commitSha: sha,
     commitShaShort: sha ? sha.slice(0, 7) : null,
-    deploymentId: source.VERCEL_DEPLOYMENT_ID ?? null,
-    region: source.VERCEL_REGION ?? null,
-    env: normaliseEnv(source.VERCEL_ENV),
+    runId: env.GITHUB_RUN_ID ?? null,
+    ref: env.GITHUB_REF_NAME ?? null,
+    builtAt: now().toISOString(),
   };
 }
 
-export function getHealth(source: DeploySource = process.env): HealthStatus {
-  return {
-    ok: true,
-    deploy: readDeployInfo(source),
-  };
+export function getHealth(
+  env: EnvSource = process.env,
+  now: () => Date = () => new Date(),
+): HealthStatus {
+  return { ok: true, deploy: readDeployInfo(env, now) };
 }

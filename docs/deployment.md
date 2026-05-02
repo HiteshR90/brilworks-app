@@ -1,93 +1,110 @@
 # Deployment
 
-Per [ADR 0001](./adr/0001-foundational-stack.md), Brilworks runs on **Vercel** in
-region **`iad1`** (us-east). This document covers the staging URL, how
-auto-deploy works, secrets policy, and how to roll back.
+The Brilworks app shell is hosted on **GitHub Pages**, served from the `main`
+branch via GitHub Actions. See [ADR 0002](./adr/0002-staging-uses-github-pages.md)
+for the rationale (it supersedes the Vercel decision in
+[ADR 0001](./adr/0001-foundational-stack.md#4-deployment-target--vercel-for-the-web-tier-region-iad1-us-east-1)).
 
-> **Status:** the code-side prep (this app, `vercel.json`, `/api/health`) is
-> ready. The Vercel project itself must be linked to the GitHub repo by an
-> account holder before the staging URL goes live. The placeholder below is
-> updated in the same PR that connects the repo to Vercel.
+> **Status:** repo is public; Pages source is "GitHub Actions"; deploy
+> workflow lives at [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
 
 ## Environments
 
-We run a **single** environment for now: `staging`. Production will stand up
-once we have a real customer (per [BRI-4](#) scope).
+We run a **single** environment for now: `staging`. Production stands up once
+we have a real customer.
 
-| Environment | Trigger             | URL                                      |
-| ----------- | ------------------- | ---------------------------------------- |
-| staging     | merge to `main`     | _set after Vercel project is linked_     |
-| preview     | open PR             | `https://<branch>--brilworks-app.vercel.app` (auto) |
-| local       | `pnpm dev`          | `http://localhost:3000`                  |
+| Environment | Trigger             | URL                                              |
+| ----------- | ------------------- | ------------------------------------------------ |
+| staging     | merge to `main`     | https://hiteshr90.github.io/brilworks-app/       |
+| local       | `pnpm dev`          | http://localhost:3000                            |
 
-`staging` maps to Vercel's "Production" environment on the project. There is
-no Vercel "Preview-as-staging" indirection — the Production deploy on Vercel
-**is** our staging.
+There is no per-PR preview yet — GitHub Pages publishes a single environment
+per repo. Add a preview-deploys workflow if/when the team wants it.
 
 ## Auto-deploy on `main`
 
-The Vercel GitHub integration watches the repo. On every push to `main` Vercel
-queues a Production deploy. Typical wall-clock: <3 minutes for this scaffold.
+Every push to `main` triggers
+[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml). The job
+runs `pnpm install --frozen-lockfile && pnpm build` with
+`GITHUB_PAGES_BUILD=true` (which switches Next.js into `output: "export"` with
+the right `basePath`/`assetPrefix`), uploads `out/` via
+`actions/upload-pages-artifact@v3`, and deploys via `actions/deploy-pages@v4`.
+The workflow uses the **workflow-scoped `GITHUB_TOKEN`** — no long-lived
+deploy token is stored anywhere.
 
-Verify a deploy reached the staging URL by hitting the health route:
+Typical wall-clock for the placeholder app: under 2 minutes from push to live.
+
+### Verifying a deploy
 
 ```bash
-curl https://<staging-url>/api/health
-# {"ok":true,"deploy":{"commitSha":"...","commitShaShort":"...","deploymentId":"...","region":"iad1","env":"production"}}
+curl https://hiteshr90.github.io/brilworks-app/api/health
+# {"ok":true,"deploy":{"commitSha":"...","commitShaShort":"...","runId":"...","ref":"main","builtAt":"..."}}
 ```
 
-`commitShaShort` should match the `main` HEAD commit you just merged.
+`commitShaShort` should match the first seven chars of the `main` HEAD commit
+that was just merged. The route is exported as a static `force-static` JSON
+response at build time, so the SHA is whatever the deploy snapshot captured.
 
 ## Secrets and env vars
 
 **Rules**
 
-- No plaintext secrets in the repo, ever. `.gitleaks` runs on every PR.
+- No plaintext secrets in the repo, ever. `gitleaks` runs on every PR
+  ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
 - `.env.local` is gitignored and is **only** for local dev.
-- All staging/production secrets live in Vercel **Project Settings → Environment Variables**, scoped to `Production` (and `Preview` if needed).
-- Secret rotation is a manual rotate-in-Vercel + redeploy.
+- Runtime secrets live in **GitHub Actions secrets** (Settings → Secrets and
+  variables → Actions). Reference them in the workflow via
+  `${{ secrets.NAME }}`.
+- Static-export means there is no server-side runtime in staging today, so
+  no runtime secrets are wired in yet. Server-runtime needs (auth, DB,
+  Sentry write keys) get revisited when [BRI-5](#) (observability) and
+  [BRI-6](#) (auth) ship — at which point the deploy story may need to
+  change too (see ADR 0002).
+- Secret rotation: rotate the value in GitHub Actions secrets, then push a
+  no-op commit (or run the workflow manually) to redeploy with the new value.
 
 **Required env vars for the app to boot in staging today**
 
 | Name | Scope | Notes |
 | ---- | ----- | ----- |
-| _(none yet — scaffold has no DB or auth)_ | | Added by [BRI-5](#) (observability) and [BRI-6](#) (auth). |
+| _(none yet — placeholder app has no DB or auth)_ | | Added by [BRI-5](#) and [BRI-6](#). |
 
-**Vercel auto-injects** the following on every deploy — do not set them manually:
+**GitHub Actions auto-injects** the following on every deploy — do not set
+them manually:
 
-- `VERCEL_GIT_COMMIT_SHA` — commit being deployed
-- `VERCEL_DEPLOYMENT_ID` — unique deploy id (used in rollback)
-- `VERCEL_REGION` — runtime region
-- `VERCEL_ENV` — `production` | `preview` | `development`
+- `GITHUB_SHA` — commit being deployed
+- `GITHUB_RUN_ID` — workflow run id
+- `GITHUB_REF_NAME` — branch name (`main` for staging)
+- `GITHUB_TOKEN` — workflow-scoped token used by `actions/deploy-pages`
 
-These power `/api/health`.
+`GITHUB_SHA` / `GITHUB_RUN_ID` / `GITHUB_REF_NAME` are baked into
+`/api/health` at build time via `getHealth()` in
+[`lib/health.ts`](../lib/health.ts).
 
 ## Rollback
 
-A bad deploy is reverted in under a minute by promoting the previous good
-deployment. Two paths, dashboard first:
-
-### 1. Vercel dashboard (preferred)
-
-1. Open the project → **Deployments** tab.
-2. Find the most recent **Ready** deploy that predates the bad one.
-3. Click `…` → **Promote to Production**.
-
-The staging URL flips immediately. No git revert required.
-
-### 2. Vercel CLI fallback
+A bad deploy is reverted by pushing a revert commit on `main`. There is no
+"promote previous deploy" primitive on GitHub Pages — re-deploying an earlier
+commit *is* the rollback.
 
 ```bash
-# List recent deploys for the project
-vercel ls brilworks-app
-
-# Promote a specific deployment URL back to Production
-vercel promote <deployment-url> --scope <team>
+git revert <bad-sha>
+git push origin main
 ```
 
-If a bad commit is on `main`, the **right follow-up** after rolling back is to
-revert it on `main` (`git revert <bad-sha> && git push origin main`) so the
-next deploy doesn't re-introduce the regression.
+Within ~2 minutes the deploy workflow re-runs against the reverted state and
+the staging URL is healthy again.
+
+For an even faster recovery while you investigate (the staging URL goes back
+to a known-good state without you needing to identify the bad commit), trigger
+the deploy workflow manually against the last known good commit:
+
+```bash
+gh workflow run deploy.yml --ref <good-sha>
+```
+
+This works because `workflow_dispatch` is enabled in
+[`deploy.yml`](../.github/workflows/deploy.yml).
 
 ### When to roll back
 
@@ -95,20 +112,20 @@ next deploy doesn't re-introduce the regression.
 - a synthetic check (added later via [BRI-5](#)) fires, or
 - a human notices the staging URL is broken.
 
-Roll back **first**, debug **second**. Reverts on a single-engineer team are cheap.
+Roll back **first**, debug **second**. Reverts on a small team are cheap.
 
-## First-time Vercel project setup
+## First-time GitHub Pages setup
 
-This is the manual one-time hookup an account holder must do (see [BRI-4](#)
-for the live request).
+This is the one-time setup an account holder did when wiring this up; kept
+for reference in case we need to recreate the environment.
 
-1. Sign in to Vercel with the account that should own the project.
-2. **Add New → Project** → import `HiteshR90/brilworks-app` from GitHub.
-3. Framework preset: **Next.js** (auto-detected).
-4. Root directory: `./`. Build command: `pnpm build` (auto from `vercel.json`).
-5. Region: `iad1` (auto from `vercel.json`).
-6. Skip env vars on first deploy (none required for the scaffold).
-7. **Deploy**. Capture the `*.vercel.app` URL and update this doc + the
-   closing comment on [BRI-4](#).
-
-After that, every push to `main` auto-deploys.
+1. Make sure the repo is **public** (GitHub Pages on the free tier requires
+   public repos).
+2. Enable Pages via the API:
+   ```bash
+   gh api -X POST /repos/HiteshR90/brilworks-app/pages -f build_type=workflow
+   ```
+   Or in the dashboard: Settings → Pages → Source: **GitHub Actions**.
+3. Push the
+   [`deploy.yml`](../.github/workflows/deploy.yml) workflow to `main` —
+   first run publishes the site.

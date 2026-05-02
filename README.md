@@ -9,9 +9,10 @@ Brilworks app shell. Pre-PMF. Ship boring.
 - Vitest for unit/integration tests
 - pnpm 10 as the package manager
 - Postgres (Neon) + Drizzle, Auth.js, Sentry/Pino/Axiom — wired in follow-up tickets
-- Vercel `iad1` for the web tier — wired in follow-up tickets
+- GitHub Pages for the staging tier (static export); SSR-capable host
+  revisits when [BRI-5](#) / [BRI-6](#) need server runtime
 
-Full rationale: [docs/adr/0001-foundational-stack.md](docs/adr/0001-foundational-stack.md).
+Full rationale: [docs/adr/0001-foundational-stack.md](docs/adr/0001-foundational-stack.md), with the deploy-target change in [docs/adr/0002-staging-uses-github-pages.md](docs/adr/0002-staging-uses-github-pages.md).
 
 ## Local dev
 
@@ -55,13 +56,15 @@ secret scan. See [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 
 ## Deploy
 
-Vercel `iad1`, auto-deploy on `main`, preview URL per PR. Setup, secrets
-policy, and rollback steps live in
-[docs/deployment.md](docs/deployment.md).
+GitHub Pages, auto-deploy on `main` via [`deploy.yml`](.github/workflows/deploy.yml).
+Live at <https://hiteshr90.github.io/brilworks-app/>. Secrets policy and
+rollback steps live in [docs/deployment.md](docs/deployment.md).
 
 ## Where to look next
 
-- ADR 0001: [docs/adr/0001-foundational-stack.md](docs/adr/0001-foundational-stack.md)
+- ADR 0001 (stack): [docs/adr/0001-foundational-stack.md](docs/adr/0001-foundational-stack.md)
+- ADR 0002 (deploy target): [docs/adr/0002-staging-uses-github-pages.md](docs/adr/0002-staging-uses-github-pages.md)
 - Deployment: [docs/deployment.md](docs/deployment.md)
 - CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
-- Health check: `GET /api/health` → returns `{ ok, deploy: { commitSha, region, env, ... } }`
+- Deploy: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+- Health: `GET /api/health` → static JSON with the deploy's commit SHA + run id
