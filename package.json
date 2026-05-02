@@ -20,6 +20,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@sentry/react": "^8.55.2",
     "next": "15.1.6",
     "react": "19.0.0",
     "react-dom": "19.0.0"
