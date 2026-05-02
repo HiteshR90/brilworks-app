@@ -35,6 +35,9 @@ jobs:
       - run: pnpm build
         env:
           GITHUB_PAGES_BUILD: "true"
+          NEXT_PUBLIC_GIT_SHA: ${{ github.sha }}
+          NEXT_PUBLIC_SENTRY_DSN: ${{ secrets.SENTRY_DSN_STAGING }}
+          NEXT_PUBLIC_SENTRY_ENV: staging
 
       - uses: actions/configure-pages@v5
 

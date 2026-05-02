@@ -25,17 +25,17 @@ pnpm dev           # http://localhost:3000
 
 ## Scripts
 
-| Command            | What it does                          |
-|--------------------|---------------------------------------|
-| `pnpm dev`         | Next.js dev server                    |
-| `pnpm build`       | Production build                      |
-| `pnpm start`       | Run the production build              |
-| `pnpm lint`        | ESLint (flat config)                  |
-| `pnpm typecheck`   | `tsc --noEmit`                        |
-| `pnpm test`        | Vitest, run once                      |
-| `pnpm test:watch`  | Vitest, watch mode                    |
-| `pnpm format`      | Prettier write                        |
-| `pnpm format:check`| Prettier check (CI uses this)         |
+| Command             | What it does                  |
+| ------------------- | ----------------------------- |
+| `pnpm dev`          | Next.js dev server            |
+| `pnpm build`        | Production build              |
+| `pnpm start`        | Run the production build      |
+| `pnpm lint`         | ESLint (flat config)          |
+| `pnpm typecheck`    | `tsc --noEmit`                |
+| `pnpm test`         | Vitest, run once              |
+| `pnpm test:watch`   | Vitest, watch mode            |
+| `pnpm format`       | Prettier write                |
+| `pnpm format:check` | Prettier check (CI uses this) |
 
 ## CI
 
@@ -65,7 +65,8 @@ rollback steps live in [docs/deployment.md](docs/deployment.md).
 - ADR 0001 (stack): [docs/adr/0001-foundational-stack.md](docs/adr/0001-foundational-stack.md)
 - ADR 0002 (deploy target): [docs/adr/0002-staging-uses-github-pages.md](docs/adr/0002-staging-uses-github-pages.md)
 - Deployment: [docs/deployment.md](docs/deployment.md)
+- Observability: [docs/observability.md](docs/observability.md) — 30-second "is staging healthy?" runbook lives at the top
 - CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 - Deploy: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+- Uptime synthetic: [`.github/workflows/uptime.yml`](.github/workflows/uptime.yml)
 - Health: `GET /api/health` → static JSON with the deploy's commit SHA + run id
-
