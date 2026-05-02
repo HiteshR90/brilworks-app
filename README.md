@@ -68,3 +68,4 @@ rollback steps live in [docs/deployment.md](docs/deployment.md).
 - CI: [`.github/workflows/ci.yml`](.github/workflows/ci.yml)
 - Deploy: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
 - Health: `GET /api/health` → static JSON with the deploy's commit SHA + run id
+
