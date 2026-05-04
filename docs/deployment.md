@@ -1,49 +1,63 @@
 # Deployment
 
-The Brilworks app shell is hosted on **GitHub Pages**, served from the `main`
-branch via GitHub Actions. See [ADR 0002](./adr/0002-staging-uses-github-pages.md)
-for the rationale (it supersedes the Vercel decision in
-[ADR 0001](./adr/0001-foundational-stack.md#4-deployment-target--vercel-for-the-web-tier-region-iad1-us-east-1)).
+The Brilworks app shell is hosted on **Cloudflare Pages**, deployed from the
+`main` branch via Cloudflare's GitHub OAuth integration. See
+[ADR 0003](./adr/0003-staging-moves-to-cloudflare-pages.md) for the rationale
+(it supersedes the GitHub Pages decision in
+[ADR 0002](./adr/0002-staging-uses-github-pages.md), which itself superseded
+the Vercel decision in
+[ADR 0001 §4](./adr/0001-foundational-stack.md#4-deployment-target--vercel-for-the-web-tier-region-iad1-us-east-1)).
 
-> **Status:** repo is public; Pages source is "GitHub Actions"; deploy
-> workflow lives at [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml).
+> **Status:** repo is public; Cloudflare Pages project is connected to the
+> repo via OAuth; build runs via [`@cloudflare/next-on-pages`](https://github.com/cloudflare/next-on-pages);
+> there is **no** stored `CLOUDFLARE_API_TOKEN` in CI.
 
 ## Environments
 
 We run a **single** environment for now: `staging`. Production stands up once
 we have a real customer.
 
-| Environment | Trigger             | URL                                              |
-| ----------- | ------------------- | ------------------------------------------------ |
-| staging     | merge to `main`     | https://hiteshr90.github.io/brilworks-app/       |
-| local       | `pnpm dev`          | http://localhost:3000                            |
+| Environment | Trigger         | URL                                                     |
+| ----------- | --------------- | ------------------------------------------------------- |
+| staging     | merge to `main` | https://brilworks-app.pages.dev/ (set after CF connect) |
+| local       | `pnpm dev`      | http://localhost:3000                                   |
 
-There is no per-PR preview yet — GitHub Pages publishes a single environment
-per repo. Add a preview-deploys workflow if/when the team wants it.
+Cloudflare Pages also publishes a preview deployment per branch by default;
+we keep that off to preserve the free-tier build budget. Re-enable when the
+team wants per-PR previews.
 
 ## Auto-deploy on `main`
 
-Every push to `main` triggers
-[`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml). The job
-runs `pnpm install --frozen-lockfile && pnpm build` with
-`GITHUB_PAGES_BUILD=true` (which switches Next.js into `output: "export"` with
-the right `basePath`/`assetPrefix`), uploads `out/` via
-`actions/upload-pages-artifact@v3`, and deploys via `actions/deploy-pages@v4`.
-The workflow uses the **workflow-scoped `GITHUB_TOKEN`** — no long-lived
-deploy token is stored anywhere.
+When the Cloudflare Pages project is connected to the GitHub repo, Cloudflare
+listens for pushes (via GitHub OAuth — no token in our CI) and runs the build
+on its own infrastructure. Wall-clock for the placeholder app is ~2–3 minutes
+from push to live.
 
-Typical wall-clock for the placeholder app: under 2 minutes from push to live.
+Build configuration in the Cloudflare Pages dashboard:
+
+| Field                 | Value                                                 |
+| --------------------- | ----------------------------------------------------- |
+| Framework preset      | `Next.js`                                             |
+| Build command         | `pnpm install && pnpm exec @cloudflare/next-on-pages` |
+| Build output dir      | `.vercel/output/static`                               |
+| Root directory        | `/`                                                   |
+| Production branch     | `main`                                                |
+| Compatibility flags   | `nodejs_compat` (Production)                          |
+| Environment variables | see "Secrets and env vars" below                      |
+
+The same flags also live in [`wrangler.toml`](../wrangler.toml) for clarity
+and for `wrangler pages dev` to pick up locally.
 
 ### Verifying a deploy
 
 ```bash
-curl https://hiteshr90.github.io/brilworks-app/api/health
+curl https://<your-pages-url>/api/health
 # {"ok":true,"deploy":{"commitSha":"...","commitShaShort":"...","runId":"...","ref":"main","builtAt":"..."}}
 ```
 
 `commitShaShort` should match the first seven chars of the `main` HEAD commit
-that was just merged. The route is exported as a static `force-static` JSON
-response at build time, so the SHA is whatever the deploy snapshot captured.
+that was just merged. The route is `force-static` JSON evaluated at build
+time, so the SHA is whatever the build snapshot captured.
 
 ## Secrets and env vars
 
@@ -52,80 +66,77 @@ response at build time, so the SHA is whatever the deploy snapshot captured.
 - No plaintext secrets in the repo, ever. `gitleaks` runs on every PR
   ([`.github/workflows/ci.yml`](../.github/workflows/ci.yml)).
 - `.env.local` is gitignored and is **only** for local dev.
-- Runtime secrets live in **GitHub Actions secrets** (Settings → Secrets and
-  variables → Actions). Reference them in the workflow via
-  `${{ secrets.NAME }}`.
-- Static-export means there is no server-side runtime in staging today, so
-  no runtime secrets are wired in yet. Server-runtime needs (auth, DB,
-  Sentry write keys) get revisited when [BRI-5](#) (observability) and
-  [BRI-6](#) (auth) ship — at which point the deploy story may need to
-  change too (see ADR 0002).
-- Secret rotation: rotate the value in GitHub Actions secrets, then push a
-  no-op commit (or run the workflow manually) to redeploy with the new value.
+- Runtime secrets live in **Cloudflare Pages env vars** (CF dashboard →
+  Workers & Pages → brilworks-app → Settings → Environment variables).
+  Mark sensitive ones as _Encrypted_.
+- The build runs on Cloudflare's infra, not GitHub Actions, so the env vars
+  must be set on the Cloudflare side (not in GitHub Actions secrets).
+- Secret rotation: rotate the value in Cloudflare Pages env vars; redeploy
+  by pushing a no-op commit (or hitting "Retry deployment" in the CF dash).
 
-**Required env vars for the app to boot in staging today**
+**Required env vars for the app to boot in staging**
 
-| Name | Scope | Notes |
-| ---- | ----- | ----- |
-| _(none yet — placeholder app has no DB or auth)_ | | Added by [BRI-5](#) and [BRI-6](#). |
+| Name                     | Required at | Source                                                        |
+| ------------------------ | ----------- | ------------------------------------------------------------- |
+| `AUTH_SECRET`            | runtime     | `openssl rand -base64 32`                                     |
+| `AUTH_URL`               | runtime     | the staging URL, e.g. `https://brilworks-app.pages.dev`       |
+| `AUTH_GOOGLE_ID`         | runtime     | Google Cloud Console → OAuth client                           |
+| `AUTH_GOOGLE_SECRET`     | runtime     | Google Cloud Console → OAuth client (encrypted)               |
+| `RESEND_API_KEY`         | runtime     | Resend dashboard → API keys (encrypted)                       |
+| `EMAIL_FROM`             | runtime     | sender address, e.g. `auth@brilworks.dev`                     |
+| `DATABASE_URL`           | runtime     | Neon dev branch connection string (encrypted)                 |
+| `NEXT_PUBLIC_GIT_SHA`    | build       | Cloudflare auto-injects `CF_PAGES_COMMIT_SHA`; map it in dash |
+| `NEXT_PUBLIC_SENTRY_DSN` | build       | Sentry project DSN (no secret leak — public DSN)              |
+| `NEXT_PUBLIC_SENTRY_ENV` | build       | `staging`                                                     |
 
-**GitHub Actions auto-injects** the following on every deploy — do not set
-them manually:
-
-- `GITHUB_SHA` — commit being deployed
-- `GITHUB_RUN_ID` — workflow run id
-- `GITHUB_REF_NAME` — branch name (`main` for staging)
-- `GITHUB_TOKEN` — workflow-scoped token used by `actions/deploy-pages`
-
-`GITHUB_SHA` / `GITHUB_RUN_ID` / `GITHUB_REF_NAME` are baked into
-`/api/health` at build time via `getHealth()` in
-[`lib/health.ts`](../lib/health.ts).
+`getHealth()` in [`lib/health.ts`](../lib/health.ts) reads
+`GITHUB_SHA` / `GITHUB_RUN_ID` / `GITHUB_REF_NAME` from the build env. On
+Cloudflare these are not auto-injected; the dashboard maps Cloudflare's
+`CF_PAGES_COMMIT_SHA` and `CF_PAGES_BRANCH` into the same names so
+`getHealth()` keeps working unchanged.
 
 ## Rollback
 
-A bad deploy is reverted by pushing a revert commit on `main`. There is no
-"promote previous deploy" primitive on GitHub Pages — re-deploying an earlier
-commit *is* the rollback.
+Cloudflare Pages keeps every previous deployment around. Rollback options,
+fastest to slowest:
 
-```bash
-git revert <bad-sha>
-git push origin main
-```
+1. **Cloudflare Pages dashboard** → Deployments → pick a known-good build →
+   "Rollback to this deployment". Live within seconds; no code change.
+2. **Revert on `main`**:
+   ```bash
+   git revert <bad-sha>
+   git push origin main
+   ```
+   CF rebuilds from the reverted state (~2–3 minutes).
 
-Within ~2 minutes the deploy workflow re-runs against the reverted state and
-the staging URL is healthy again.
-
-For an even faster recovery while you investigate (the staging URL goes back
-to a known-good state without you needing to identify the bad commit), trigger
-the deploy workflow manually against the last known good commit:
-
-```bash
-gh workflow run deploy.yml --ref <good-sha>
-```
-
-This works because `workflow_dispatch` is enabled in
-[`deploy.yml`](../.github/workflows/deploy.yml).
+For deeper investigation, the bad deployment stays in the dashboard list —
+re-deploy it later if the rollback was a mistake.
 
 ### When to roll back
 
 - `/api/health` returns non-200, or
-- a synthetic check (added later via [BRI-5](#)) fires, or
+- the staging uptime synthetic ([`.github/workflows/uptime.yml`](../.github/workflows/uptime.yml))
+  fires, or
 - a human notices the staging URL is broken.
 
-Roll back **first**, debug **second**. Reverts on a small team are cheap.
+Roll back **first**, debug **second**.
 
-## First-time GitHub Pages setup
+## First-time Cloudflare Pages setup
 
-This is the one-time setup an account holder did when wiring this up; kept
-for reference in case we need to recreate the environment.
+One-time steps an account holder must perform to wire this up. Required
+before [BRI-6](#) (auth) can ship to staging.
 
-1. Make sure the repo is **public** (GitHub Pages on the free tier requires
-   public repos).
-2. Enable Pages via the API:
-   ```bash
-   gh api -X POST /repos/HiteshR90/brilworks-app/pages -f build_type=workflow
-   ```
-   Or in the dashboard: Settings → Pages → Source: **GitHub Actions**.
-3. Push the
-   [`deploy.yml`](../.github/workflows/deploy.yml) workflow to `main` —
-   first run publishes the site.
+1. Create a Cloudflare account (free tier, no card required).
+2. In the dashboard: **Workers & Pages** → **Create** → **Pages** →
+   **Connect to Git** → authorize the Cloudflare GitHub app on the
+   `HiteshR90/brilworks-app` repo (OAuth — no token to copy).
+3. In the project settings, set the build configuration table above.
+4. Add the required env vars from "Secrets and env vars" above.
+5. Set the GitHub repo variable `STAGING_HEALTH_URL` to
+   `https://<cf-pages-url>/api/health` so
+   [`uptime.yml`](../.github/workflows/uptime.yml) starts pinging the new URL.
+6. Trigger the first deployment from the dashboard, then verify
+   `/api/health` returns 200 with the right SHA.
+
+After that, every push to `main` auto-deploys. There is no GitHub Actions
+deploy step (the old one was removed in this PR).

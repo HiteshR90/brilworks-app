@@ -12,7 +12,15 @@ const compat = new FlatCompat({
 const config = [
   ...compat.extends("next/core-web-vitals", "next/typescript", "prettier"),
   {
-    ignores: [".next/**", "out/**", "node_modules/**", "coverage/**"],
+    ignores: [
+      ".next/**",
+      "out/**",
+      ".vercel/**",
+      ".open-next/**",
+      "lib/db/migrations/**",
+      "node_modules/**",
+      "coverage/**",
+    ],
   },
 ];
 

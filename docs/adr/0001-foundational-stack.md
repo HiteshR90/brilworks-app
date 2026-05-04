@@ -16,6 +16,7 @@ container.
 ## Decisions
 
 ### 1. Frontend / SSR — Next.js 15 (App Router) on React 19
+
 - **Alternatives considered:** SvelteKit (smaller talent pool, fewer libs),
   Remix/React Router 7 (fine, but smaller ecosystem and a moving target post
   merge), Vite + plain React (loses SSR/SEO out of the box).
@@ -24,6 +25,7 @@ container.
   on any container host if we leave Vercel.
 
 ### 2. Backend language + runtime — TypeScript on Node 22 LTS, starting in Next.js Route Handlers
+
 - **Alternatives considered:** Go (more boilerplate; splits language stack;
   premature given one engineer), Python/FastAPI (separate runtime + ORM),
   Bun (fast but immature in prod for our needs).
@@ -32,17 +34,19 @@ container.
   (background jobs, websockets, heavy CPU).
 
 ### 3. Database — Managed PostgreSQL (Neon) + Drizzle ORM
+
 - **Alternatives considered:** Supabase Postgres (bundles Auth/Storage we are
   not committing to), AWS RDS (slow to provision, ops tax), MySQL (no win
   for us), Mongo/Dynamo (no relational guarantees we will want later).
 - **Why:** Postgres is the most defensible, most portable database in
-  existence. Neon is *standard* Postgres with branching for preview envs;
+  existence. Neon is _standard_ Postgres with branching for preview envs;
   `pg_dump` exits in an afternoon. Drizzle is a thin, SQL-first ORM so
   swapping providers — or ORMs — is mechanical.
 - **Analytics:** stays in the same Postgres until traffic forces ClickHouse
   or Tinybird. Do not pre-architect.
 
 ### 4. Deployment target — Vercel for the web tier, region `iad1` (us-east-1)
+
 - **Alternatives considered:** Fly.io (great but more ops), AWS ECS/Fargate
   (too much yak before any user), Render (fine, smaller ecosystem),
   Cloudflare Workers (runtime constraints conflict with Node libs we need).
@@ -53,15 +57,17 @@ container.
   demands.
 
 ### 5. Auth — Auth.js (NextAuth v5) with Drizzle/Postgres adapter
+
 - **Alternatives considered:** Clerk (excellent DX but owns user identities;
   re-hosting passwords/MFA is more than a week of work at scale), Supabase
   Auth (couples us to Supabase), WorkOS (B2B-heavy, premature), rolling our
   own (no).
-- **Why:** Open source, user records live in *our* Postgres, magic-link +
+- **Why:** Open source, user records live in _our_ Postgres, magic-link +
   Google to start. Sessions in DB (not raw JWTs) so we can revoke. Migrating
   off is a SQL export.
 
 ### 6. Observability — Sentry (errors) + Pino (structured logs) + Axiom (log aggregation)
+
 - **Alternatives considered:** Datadog (overkill + expensive pre-revenue),
   BetterStack/Logtail (fine), New Relic (heavy), DIY (no).
 - **Why:** Sentry is the de-facto standard for app errors; Pino emits
@@ -70,6 +76,7 @@ container.
   that warrants them — premature otherwise.
 
 ### 7. Package manager + monorepo posture — pnpm, single repo, **single Next.js app, no workspaces**
+
 - **Alternatives considered:** npm/yarn (slower, looser), Turborepo from day
   one (premature: one app does not need it), Nx (heavyweight).
 - **Why:** pnpm is the fastest, strictest, and most disk-efficient option;
@@ -89,16 +96,16 @@ container.
 
 ## Two-way-door audit
 
-| Decision  | Cost to reverse                                    | Within a week? |
-|-----------|----------------------------------------------------|----------------|
-| Next.js   | Re-platform pages, keep API; or `next start` host  | Yes            |
-| Node/TS   | Rewrite per service, not the whole app             | Yes (per svc)  |
-| Postgres  | `pg_dump` + restore on any provider                | Yes            |
-| Vercel    | Containerize and run `next start` on Fly/Render    | Yes            |
-| Auth.js   | Users + sessions in our Postgres; export SQL       | Yes            |
-| Sentry    | Drop SDK; logs already independent in Axiom        | Yes            |
-| Axiom     | Logs are JSON; redirect Pino transport             | Yes            |
-| pnpm      | `pnpm import` from npm, or just regenerate lock    | Yes            |
+| Decision | Cost to reverse                                   | Within a week? |
+| -------- | ------------------------------------------------- | -------------- |
+| Next.js  | Re-platform pages, keep API; or `next start` host | Yes            |
+| Node/TS  | Rewrite per service, not the whole app            | Yes (per svc)  |
+| Postgres | `pg_dump` + restore on any provider               | Yes            |
+| Vercel   | Containerize and run `next start` on Fly/Render   | Yes            |
+| Auth.js  | Users + sessions in our Postgres; export SQL      | Yes            |
+| Sentry   | Drop SDK; logs already independent in Axiom       | Yes            |
+| Axiom    | Logs are JSON; redirect Pino transport            | Yes            |
+| pnpm     | `pnpm import` from npm, or just regenerate lock   | Yes            |
 
 All eight are reversible inside a week today. Re-audit at each architectural
 review when a decision becomes load-bearing.

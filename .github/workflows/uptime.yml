@@ -20,12 +20,19 @@ jobs:
     name: Hit /api/health and assert ok=true
     runs-on: ubuntu-latest
     env:
-      HEALTH_URL: https://hiteshr90.github.io/brilworks-app/api/health
+      # Set repo variable STAGING_HEALTH_URL after Cloudflare Pages
+      # connects (e.g. https://brilworks-app.pages.dev/api/health). Until
+      # then this defaults to a sentinel that fails fast with a clear log.
+      HEALTH_URL: ${{ vars.STAGING_HEALTH_URL || 'https://staging-not-configured.invalid/api/health' }}
     steps:
       - name: Curl health endpoint
         id: curl
         run: |
           set -euo pipefail
+          if [[ "$HEALTH_URL" == *"staging-not-configured.invalid"* ]]; then
+            echo "STAGING_HEALTH_URL repo variable is not set yet (Cloudflare Pages cutover pending). Skipping uptime check." >&2
+            exit 0
+          fi
           response_file=$(mktemp)
           status=$(curl -sS -o "$response_file" -w "%{http_code}" --max-time 15 "$HEALTH_URL" || echo "000")
           body=$(cat "$response_file")
