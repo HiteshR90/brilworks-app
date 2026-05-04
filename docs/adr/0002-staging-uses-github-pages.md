@@ -46,7 +46,7 @@ code, via a GitHub Actions workflow. Next.js runs in static-export mode
   ISR, middleware, and the Image Optimization API for the placeholder phase.
 - §3 (Postgres / Drizzle), §5 (Auth.js), §6 (Sentry / Pino / Axiom): stand,
   but their integration is deferred until the staging tier can host a server
-  runtime again — which means revisiting *this* ADR before
+  runtime again — which means revisiting _this_ ADR before
   [BRI-5](#) / [BRI-6](#) implementation.
 - §7 (pnpm, single repo): stands.
 - §2 (TypeScript on Node 22): stands (the build still runs on Node 22 in
@@ -58,7 +58,7 @@ code, via a GitHub Actions workflow. Next.js runs in static-export mode
   requires a fresh approval round.
 - **Cloudflare Pages** — would have preserved SSR via
   `@cloudflare/next-on-pages`, but reintroduces a third-party-account-holder
-  ask similar to Vercel and was endorsed by the CEO as the *fallback only*
+  ask similar to Vercel and was endorsed by the CEO as the _fallback only_
   if the board specifically wanted SSR-from-day-one. Board did not.
 - **Netlify** — same shape as Cloudflare Pages, plus a paid tier for
   private repos. Same downside.

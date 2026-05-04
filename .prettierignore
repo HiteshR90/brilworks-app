@@ -1,4 +1,8 @@
 .next
+.vercel
+.open-next
+out
 node_modules
 coverage
 pnpm-lock.yaml
+lib/db/migrations
